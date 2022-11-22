@@ -2,7 +2,9 @@
 import sys
 from collections import namedtuple
 import numpy as np
-from random import randint
+from random import randint, random
+import networkx as nx
+import matplotlib.pyplot as plt
 
 coords = namedtuple("coords", ["x", "y"])
 
@@ -35,8 +37,6 @@ def path_len(frog):
     tmp = 0
     for k,v in enumerate(frog[1:]):
         tmp += euclidean_distance(nodelist[v], nodelist[frog[k-1]])
-    # Last node to 
-    tmp += euclidean_distance(nodelist[frog[0]], nodelist[frog[-1]])
     return tmp
 
 
@@ -47,7 +47,6 @@ def frog_gen(num_frogs):
 
 def frog_sort(frogs, num_memeplex):
     fitness_list = np.array(list(map(path_len,frogs)))
-    min_dist = np.min(fitness_list)
     sorted_fitness = np.argsort(fitness_list)
     # stores the indices
     # hence dtype=int
@@ -58,61 +57,89 @@ def frog_sort(frogs, num_memeplex):
             memeplexes[i, j] = sorted_fitness[i+(num_memeplex*j)]
     return memeplexes
 
-def frog_update(u, v):
-    start = randint(0,len(u)//2)
-    end = randint(start+2,len(u))
-    tmp = u
-    tmp[start:end] = v[start:end]
-    while not frog_valid(tmp):
-        frog_update(u, v)
-    return tmp
-
 def frog_valid(frog):
     return len(frog) == len(np.unique(frog))
 
-def local_search(frogs, memeplex):
-    frog_worst = frogs[memeplex[-1]]
-    frog_best = frogs[memeplex[0]]
-    frog_greatest = frogs[0]
-    # Move wrt to best frog
-    frog_worst_new = frog_update(frog_worst, frog_best)
-    if path_len(frog_worst_new) > path_len(frog_worst):
-        # Move wrt to greatest frog
-        frog_worst_new = frog_update(frog_worst, frog_greatest)
-    if path_len(frog_worst_new) > path_len(frog_worst):
-                # generate new random frog
-        frog_worst_new = frog_gen(1)[0]
-    frogs[memeplex[-1]] = frog_worst_new
-    return frogs
 
-def memeplexes_shuffle(frogs, memeplexes):
+
+def memeplexes_shuffle(memeplexes):
     tmp = memeplexes.flatten()
     np.random.shuffle(tmp)
     tmp = tmp.reshape((memeplexes.shape[0], memeplexes.shape[1]))
     return tmp
 
-def sfla(num_frogs, num_memeplex, iter_memeplex, iter_sols):
+def submemeplex_gen(memeplex):
+    submemeplex = list()
+    n = len(memeplex)
+    # Probability that a frog is picked
+    p = np.fromiter([2*(n+1-j)/(n*(n+1)) for j in range(0,n)], dtype=float)
+    # Normalizing to 0,1
+    p = (p - np.min(p)) / (np.max(p) - np.min(p))
+    for k,v in enumerate(p):
+        if random() < v:
+            submemeplex.append(memeplex[k])
+    return submemeplex
+
+# Put a slice from start to end from src to dest and returns a copy
+def frog_update(src, dest):
+    tmp = dest.copy()
+    start = randint(0,len(src)//2)
+    end = randint(start,len(src))
+    tmp[start:end] = src[start:end]
+    while not frog_valid(tmp):
+        tmp = dest.copy()
+        start = randint(0,len(src))
+        end = randint(start,len(src))
+        tmp[start:end] = src[start:end]
+    return tmp
+
+def local_search(frogs, submemeplex):
+    global_max = frogs[0]
+    local_max = frogs[submemeplex[0]]
+    local_min = frogs[submemeplex[-1]]
+
+    tmp = frog_update(local_max, local_min)
+
+    if path_len(tmp) > path_len(local_min):
+        local_max = global_max.copy()
+        tmp = frog_update(local_max, local_min)
+    if path_len(tmp) > path_len(local_min):
+        tmp = frog_gen(1)[0]
+    local_min = tmp
+    return frogs
+
+def sfla(num_frogs, num_memeplexes, submemplex_iter, total_iteration):
     frogs = frog_gen(num_frogs)
-    memeplexes = frog_sort(frogs, num_memeplex)
-    sol_best = frogs[memeplexes[0, 0]].copy()
-    for i in range(iter_sols):
-        memeplexes = memeplexes_shuffle(frogs, memeplexes)
-        # We are modifying memeplexes, so can't use "for i in memeplexes"
-        for j in range(len(memeplexes)):
-            for _ in range(iter_memeplex):
-                frogs = local_search(frogs, memeplexes[j])
-            memeplexes = frog_sort(frogs, num_memeplex)
-            sol_best_new = frogs[memeplexes[0, 0]]
-            if path_len(sol_best_new) < path_len(sol_best):
-                sol_best = sol_best_new
-            print(sol_best, path_len(sol_best))
-    return sol_best, frogs, memeplexes.astype(int)
+    memeplexes = frog_sort(frogs, num_memeplexes)
+    sol = frogs[memeplexes[0, 0]].copy()
+    for _ in range(total_iteration):
+        memeplexes = memeplexes_shuffle(memeplexes)
+        for memeplex in memeplexes:
+            submemeplex = submemeplex_gen(memeplex)
+            tmp = list()
+            for _ in range(submemplex_iter):
+                frogs = local_search(frogs, submemeplex)
+                tmp.append(path_len(frogs[submemeplex[-1]]))
+            print(tmp)
+        memeplexes = frog_sort(frogs, num_memeplexes)
+        new_sol = frogs[memeplexes[0,0]].copy()
+        if path_len(new_sol) < path_len(sol):
+            sol = new_sol.copy()
+        print(sol,path_len(sol))
+    return sol
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         usage()
+    G = nx.Graph()
+    rng = np.random.default_rng(69420)
+
     nodelist = nodelist_create(sys.argv[1])
-    sol, frogs, memeplexes = sfla(num_frogs=10*len(nodelist),
-                                    num_memeplex=10, iter_memeplex = 10,
-                                    iter_sols = 50)
+    sol = sfla(num_frogs=10*len(nodelist), submemplex_iter=len(nodelist),
+                                    num_memeplexes=10, total_iteration= 10)
     print(sol, path_len(sol))
+    nx.add_path(G, sol)
+    fig, ax = plt.subplots(1,1)
+    nx.draw(G, pos=nodelist, with_labels=True)
+    plt.show()
