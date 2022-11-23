@@ -5,6 +5,7 @@ import numpy as np
 from random import randint, random
 import networkx as nx
 import matplotlib.pyplot as plt
+from itertools import chain
 
 coords = namedtuple("coords", ["x", "y"])
 
@@ -80,32 +81,29 @@ def submemeplex_gen(memeplex):
             submemeplex.append(memeplex[k])
     return submemeplex
 
-# Put a slice from start to end from src to dest and returns a copy
-def frog_update(src, dest):
-    tmp = dest.copy()
-    start = randint(0,len(src)//2)
-    end = randint(start,len(src))
-    tmp[start:end] = src[start:end]
-    while not frog_valid(tmp):
-        tmp = dest.copy()
-        start = randint(0,len(src))
-        end = randint(start,len(src))
-        tmp[start:end] = src[start:end]
-    return tmp
-
 def local_search(frogs, submemeplex):
     global_max = frogs[0]
     local_max = frogs[submemeplex[0]]
     local_min = frogs[submemeplex[-1]]
-
-    tmp = frog_update(local_max, local_min)
-
-    if path_len(tmp) > path_len(local_min):
+    start = randint(0,len(local_min)//2)
+    end = randint(start,len(local_min))
+    if path_len(local_max[start:end]) < path_len(local_min[start:end]):
+        tmp = local_min.copy()
+        tmp[start:end] = local_max[start:end]
+        while not frog_valid(tmp):
+            tmp[:start] = frog_gen(1)[0][:start]
+            tmp[end:] = frog_gen(1)[0][end:]
+        frogs[submemeplex[-1]] = tmp
+    if path_len(global_max[start:end]) < path_len(local_min[start:end]):
         local_max = global_max.copy()
-        tmp = frog_update(local_max, local_min)
-    if path_len(tmp) > path_len(local_min):
-        tmp = frog_gen(1)[0]
-    local_min = tmp
+        tmp = local_min.copy()
+        tmp[start:end] = local_max[start:end]
+        while not frog_valid(tmp):
+            tmp[:start] = frog_gen(1)[0][:start]
+            tmp[end:] = frog_gen(1)[0][end:]
+        frogs[submemeplex[-1]] = tmp
+    else:
+        frogs[submemeplex[-1]] = frog_gen(1)[0]
     return frogs
 
 def sfla(num_frogs, num_memeplexes, memeplex_iter, submemplex_iter, total_iteration):
@@ -117,17 +115,14 @@ def sfla(num_frogs, num_memeplexes, memeplex_iter, submemplex_iter, total_iterat
         for i in range(memeplex_iter):
             memeplex = memeplexes[i]
             submemeplex = submemeplex_gen(memeplex)
-            tmp = list()
             for _ in range(submemplex_iter):
                 frogs = local_search(frogs, submemeplex)
-                tmp.append(path_len(frogs[submemeplex[-1]]))
             memeplexes = frog_sort(frogs, num_memeplexes)
         new_sol = frogs[memeplexes[0,0]].copy()
         if path_len(new_sol) < path_len(sol):
             sol = new_sol.copy()
-        print(sol,path_len(sol))
+        print(f"{sol},{path_len(sol)}")
     return sol
-
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -136,10 +131,10 @@ if __name__ == "__main__":
     rng = np.random.default_rng(69420)
 
     nodelist = nodelist_create(sys.argv[1])
-    sol = sfla(num_frogs=10*len(nodelist), submemplex_iter=len(nodelist),memeplex_iter=10, num_memeplexes=10, total_iteration= 10)
+    sol = sfla(num_frogs=10*len(nodelist), submemplex_iter=len(nodelist),
+               memeplex_iter=10, num_memeplexes=10, total_iteration= 50)
     print(sol, path_len(sol))
     nx.add_path(G, sol)
     G.add_edge(sol[-1], sol[0])
-    fig, ax = plt.subplots(1,1)
     nx.draw(G, pos=nodelist, with_labels=True)
     plt.show()
