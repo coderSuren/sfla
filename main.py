@@ -43,7 +43,7 @@ def path_len(frog):
 
 def frog_gen(num_frogs):
     nodes = np.fromiter(nodelist.keys(), dtype=int)
-    return  np.array([np.random.permutation(nodes) for _ in range(num_frogs)])
+    return  np.array([rng.permutation(nodes) for _ in range(num_frogs)])
 
 def frog_sort(frogs, num_memeplex):
     fitness_list = np.array(list(map(path_len,frogs)))
@@ -108,20 +108,20 @@ def local_search(frogs, submemeplex):
     local_min = tmp
     return frogs
 
-def sfla(num_frogs, num_memeplexes, submemplex_iter, total_iteration):
+def sfla(num_frogs, num_memeplexes, memeplex_iter, submemplex_iter, total_iteration):
     frogs = frog_gen(num_frogs)
     memeplexes = frog_sort(frogs, num_memeplexes)
     sol = frogs[memeplexes[0, 0]].copy()
     for _ in range(total_iteration):
         memeplexes = memeplexes_shuffle(memeplexes)
-        for memeplex in memeplexes:
+        for i in range(memeplex_iter):
+            memeplex = memeplexes[i]
             submemeplex = submemeplex_gen(memeplex)
             tmp = list()
             for _ in range(submemplex_iter):
                 frogs = local_search(frogs, submemeplex)
                 tmp.append(path_len(frogs[submemeplex[-1]]))
-            print(tmp)
-        memeplexes = frog_sort(frogs, num_memeplexes)
+            memeplexes = frog_sort(frogs, num_memeplexes)
         new_sol = frogs[memeplexes[0,0]].copy()
         if path_len(new_sol) < path_len(sol):
             sol = new_sol.copy()
@@ -136,10 +136,10 @@ if __name__ == "__main__":
     rng = np.random.default_rng(69420)
 
     nodelist = nodelist_create(sys.argv[1])
-    sol = sfla(num_frogs=10*len(nodelist), submemplex_iter=len(nodelist),
-                                    num_memeplexes=10, total_iteration= 10)
+    sol = sfla(num_frogs=10*len(nodelist), submemplex_iter=len(nodelist),memeplex_iter=10, num_memeplexes=10, total_iteration= 10)
     print(sol, path_len(sol))
     nx.add_path(G, sol)
+    G.add_edge(sol[-1], sol[0])
     fig, ax = plt.subplots(1,1)
     nx.draw(G, pos=nodelist, with_labels=True)
     plt.show()
