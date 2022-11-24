@@ -2,10 +2,9 @@
 import sys
 from collections import namedtuple
 import numpy as np
-from random import randint, random
+import random
 import networkx as nx
 import matplotlib.pyplot as plt
-from itertools import chain
 
 coords = namedtuple("coords", ["x", "y"])
 
@@ -77,52 +76,80 @@ def submemeplex_gen(memeplex):
     # Normalizing to 0,1
     p = (p - np.min(p)) / (np.max(p) - np.min(p))
     for k,v in enumerate(p):
-        if random() < v:
+        if random.random() < v:
             submemeplex.append(memeplex[k])
     return submemeplex
+
 
 def local_search(frogs, submemeplex):
     global_max = frogs[0]
     local_max = frogs[submemeplex[0]]
     local_min = frogs[submemeplex[-1]]
-    start = randint(0,len(local_min)//2)
-    end = randint(start,len(local_min))
+    start = random.randint(0,len(local_min)//2)
+    end = random.randint(start,len(local_min))
+    tmp = local_min.copy()
     if path_len(local_max[start:end]) < path_len(local_min[start:end]):
-        tmp = local_min.copy()
         tmp[start:end] = local_max[start:end]
-        while not frog_valid(tmp):
-            tmp[:start] = frog_gen(1)[0][:start]
-            tmp[end:] = frog_gen(1)[0][end:]
-        frogs[submemeplex[-1]] = tmp
-    if path_len(global_max[start:end]) < path_len(local_min[start:end]):
+        if not frog_valid(tmp):
+            #tmp = np.array(two_opt(local_min.tolist()))
+            tmp = local_max.copy()
+    elif path_len(global_max[start:end]) < path_len(local_min[start:end]):
+        tmp = local_min.copy()
         local_max = global_max.copy()
-        tmp = local_min.copy()
         tmp[start:end] = local_max[start:end]
-        while not frog_valid(tmp):
-            tmp[:start] = frog_gen(1)[0][:start]
-            tmp[end:] = frog_gen(1)[0][end:]
-        frogs[submemeplex[-1]] = tmp
+        if not frog_valid(tmp):
+            #tmp = np.array(two_opt(local_min.tolist()))
+            tmp = local_max.copy()
     else:
-        frogs[submemeplex[-1]] = frog_gen(1)[0]
+        tmp = frog_gen(1)[0]
+    frogs[submemeplex[-1]] = tmp
     return frogs
 
-def sfla(num_frogs, num_memeplexes, memeplex_iter, submemplex_iter, total_iteration):
+def sfla(num_frogs, num_memeplexes, submemplex_iter, total_iteration):
+    # Initial frog gen
     frogs = frog_gen(num_frogs)
+    # Sorting to find the initial global minimum
     memeplexes = frog_sort(frogs, num_memeplexes)
     sol = frogs[memeplexes[0, 0]].copy()
     for _ in range(total_iteration):
         memeplexes = memeplexes_shuffle(memeplexes)
-        for i in range(memeplex_iter):
-            memeplex = memeplexes[i]
+        for memeplex in memeplexes:
+            # Taking the a sample of frog from the memeplex
+            # probability that a frog is picked is inversely proportional to
+            # path length
             submemeplex = submemeplex_gen(memeplex)
             for _ in range(submemplex_iter):
                 frogs = local_search(frogs, submemeplex)
-            memeplexes = frog_sort(frogs, num_memeplexes)
+        memeplexes = frog_sort(frogs, num_memeplexes)
+        # updating global min
         new_sol = frogs[memeplexes[0,0]].copy()
         if path_len(new_sol) < path_len(sol):
             sol = new_sol.copy()
-        print(f"{sol},{path_len(sol)}")
+        print(f"{np.append(sol,sol[0])},{path_len(np.append(sol,sol[0]))}")
     return sol
+
+def swap_2opt(route, i, j):
+    new_route = route[:i]
+    new_route.extend(reversed(route[i:j+1]))
+    new_route.extend(route[j+1:])
+    return new_route
+
+
+def two_opt(route):
+    improved = True
+    best_found_route = route
+    best_found_route_cost = path_len(route)
+    while improved:
+        improved = False
+        for i in  range(1, len(best_found_route) - 1):
+            for j in range(i+1, len(best_found_route)):
+                new_route = swap_2opt(best_found_route,i,j)
+                new_route_cost = path_len(new_route)
+                if new_route_cost < best_found_route_cost:
+                    best_found_route = new_route
+                    best_found_route_cost = new_route_cost
+                    improved = True
+    return best_found_route
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -132,9 +159,17 @@ if __name__ == "__main__":
 
     nodelist = nodelist_create(sys.argv[1])
     sol = sfla(num_frogs=10*len(nodelist), submemplex_iter=len(nodelist),
-               memeplex_iter=10, num_memeplexes=10, total_iteration= 50)
+               num_memeplexes=10, total_iteration= 20)
+    sol = np.append(sol, sol[0])
+    new_sol = two_opt(sol.tolist())
     print(sol, path_len(sol))
+    print(new_sol, path_len(new_sol))
+
     nx.add_path(G, sol)
-    G.add_edge(sol[-1], sol[0])
+    plt.subplot(121)
     nx.draw(G, pos=nodelist, with_labels=True)
+    G2 = nx.Graph()
+    nx.add_path(G2, new_sol)
+    plt.subplot(122)
+    nx.draw(G2, pos=nodelist, with_labels=True)
     plt.show()
