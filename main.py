@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 from collections import namedtuple
+import itertools
 import numpy as np
 import random
 import networkx as nx
@@ -40,10 +41,35 @@ def path_len(frog):
     return tmp
 
 
+def snn(start, remaining, path):
+    if len(remaining) > 0:
+        dist = sorted(remaining, key=lambda x:euclidean_distance(nodelist[start],nodelist[x]),
+                      reverse = True)
+        dest = dist.pop()
+        path.append(start)
+        snn(dest, dist, path)
+    else:
+        return
 
-def frog_gen(num_frogs):
+
+def frog_rand():
+    return np.array(rng.permutation(np.fromiter(nodelist.keys(), dtype=int)))
+
+def frog_gen():
     nodes = np.fromiter(nodelist.keys(), dtype=int)
-    return  np.array([rng.permutation(nodes) for _ in range(num_frogs)])
+    best = list()
+    ret = list()
+    for i in nodes:
+        remaining = nodes.copy()
+        tmp = list()
+        snn(i, remaining, tmp)
+        best.append(tmp)
+    for route in best:
+        for _ in range(9):
+            ret.append(rng.permutation(route))
+        ret.append(route)
+    return np.array(ret)
+        
 
 def frog_sort(frogs, num_memeplex):
     fitness_list = np.array(list(map(path_len,frogs)))
@@ -101,13 +127,13 @@ def local_search(frogs, submemeplex):
             #tmp = np.array(two_opt(local_min.tolist()))
             tmp = local_max.copy()
     else:
-        tmp = frog_gen(1)[0]
+        tmp = frog_rand()
     frogs[submemeplex[-1]] = tmp
     return frogs
 
 def sfla(num_frogs, num_memeplexes, submemplex_iter, total_iteration):
     # Initial frog gen
-    frogs = frog_gen(num_frogs)
+    frogs = frog_gen()
     # Sorting to find the initial global minimum
     memeplexes = frog_sort(frogs, num_memeplexes)
     sol = frogs[memeplexes[0, 0]].copy()
@@ -158,7 +184,7 @@ if __name__ == "__main__":
     rng = np.random.default_rng(69420)
 
     nodelist = nodelist_create(sys.argv[1])
-    sol = sfla(num_frogs=10*len(nodelist), submemplex_iter=len(nodelist),
+    sol = sfla(num_frogs = 10*len(nodelist), submemplex_iter=len(nodelist),
                num_memeplexes=10, total_iteration= 20)
     sol = np.append(sol, sol[0])
     new_sol = two_opt(sol.tolist())
