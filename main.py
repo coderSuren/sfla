@@ -46,7 +46,7 @@ def snn(start, remaining, path):
         dist = sorted(remaining, key=lambda x:euclidean_distance(nodelist[start],nodelist[x]),
                       reverse = True)
         dest = dist.pop()
-        path.append(start)
+        path.append(dest)
         snn(dest, dist, path)
     else:
         return
@@ -145,13 +145,16 @@ def sfla(num_frogs, num_memeplexes, submemplex_iter, total_iteration):
             # path length
             submemeplex = submemeplex_gen(memeplex)
             for _ in range(submemplex_iter):
+                tmp = frogs[submemeplex[-1]]
                 frogs = local_search(frogs, submemeplex)
+                tmp2 = frogs[submemeplex[0]]
+                print(f"{tmp},{path_len(tmp)}")
+                print(f"{tmp2},{path_len(tmp2)}")
         memeplexes = frog_sort(frogs, num_memeplexes)
         # updating global min
         new_sol = frogs[memeplexes[0,0]].copy()
         if path_len(new_sol) < path_len(sol):
             sol = new_sol.copy()
-        print(f"{np.append(sol,sol[0])},{path_len(np.append(sol,sol[0]))}")
     return sol
 
 def swap_2opt(route, i, j):
