@@ -106,30 +106,47 @@ def submemeplex_gen(memeplex):
             submemeplex.append(memeplex[k])
     return submemeplex
 
+def slice_gen(left,right):
+    ind1 = random.randint(left, right)
+    ind2 = random.randint(left, right)
+    start = min(ind1, ind2)
+    end = max(ind1, ind2)
+    if start == end:
+        return slice_gen(left, right)
+    else:
+        return (start, end)
+
+
+# Takes src[start:end] puts it in tmp[start:end]
+# Takes the remaining elements from dest[] and put it in tmp in the same order
+# Leaves out the elemenets in dest[] if it is already in src[start:end]
+def arr_swap(src, dest):
+    start, end = slice_gen(0, len(src)-1)
+    tmp = np.zeros(src.shape)
+    best_path = src[start:end]
+    tmp[start:end] = best_path
+    curr_tmp = 0
+    curr_local = 0
+    while curr_tmp < len(src):
+        if curr_tmp in range(start,end):
+            curr_tmp += 1
+            continue
+        else:
+            if dest[curr_local] not in best_path:
+                tmp[curr_tmp] = dest[curr_local]
+                curr_tmp += 1
+            curr_local += 1
+    return tmp
+
 
 def local_search(frogs, submemeplex):
-    global_max = frogs[0]
     local_max = frogs[submemeplex[0]]
     local_min = frogs[submemeplex[-1]]
-    start = random.randint(0,len(local_min)//2)
-    end = random.randint(start,len(local_min))
-    tmp = local_min.copy()
-    if path_len(local_max[start:end]) < path_len(local_min[start:end]):
-        tmp[start:end] = local_max[start:end]
-        if not frog_valid(tmp):
-            #tmp = np.array(two_opt(local_min.tolist()))
-            tmp = local_max.copy()
-    elif path_len(global_max[start:end]) < path_len(local_min[start:end]):
-        tmp = local_min.copy()
-        local_max = global_max.copy()
-        tmp[start:end] = local_max[start:end]
-        if not frog_valid(tmp):
-            #tmp = np.array(two_opt(local_min.tolist()))
-            tmp = local_max.copy()
-    else:
-        tmp = frog_rand()
-    frogs[submemeplex[-1]] = tmp
+    tmp = arr_swap(local_max, local_min)
+    if path_len(tmp) < path_len(local_min):
+        frogs[submemeplex[-1]] = tmp
     return frogs
+
 
 def sfla(num_frogs, num_memeplexes, submemplex_iter, total_iteration):
     # Initial frog gen
@@ -189,7 +206,6 @@ if __name__ == "__main__":
     nodelist = nodelist_create(sys.argv[1])
     sol = sfla(num_frogs = 10*len(nodelist), submemplex_iter=len(nodelist),
                num_memeplexes=10, total_iteration= 20)
-    sol = np.append(sol, sol[0])
     new_sol = two_opt(sol.tolist())
     print(sol, path_len(sol))
     print(new_sol, path_len(new_sol))
